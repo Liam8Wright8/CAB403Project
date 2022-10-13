@@ -137,3 +137,134 @@
 // 2912-2913 temperature sensor for Level #5 (2 bytes)
 // 2914-2914 fire alarm for Level #5 (1 byte)
 // 2915-2919 padding (5 bytes)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <pthread.h>
+
+#define SHMSZ 2920
+#define Num_Of_Entries 5
+#define Num_Of_Exits 5
+#define Num_Of_Level 5
+typedef struct {
+	pthread_mutex_t *LPR_mutex, *boomgate_mutex,*info_mutex;
+	pthread_cond_t *LPR_cond,*boomgate_cond,*info_cond;
+	char *lpr[6];
+	char *boomgate,*display;
+}entry ;
+typedef struct {
+	pthread_mutex_t *LPR_mutex, *boomgate_mutex;
+	pthread_cond_t *LPR_cond,*boomgate_cond;
+	char *lpr[6];
+	char *boomgate;
+} exits;
+typedef struct {
+	pthread_mutex_t *LPR_mutex;
+	pthread_cond_t *LPR_cond;
+	char *lpr[6];
+	char *alarm;
+	int16_t *temp;
+}level ;
+
+
+int main()
+{
+	char c;
+    int shm_fd;
+    const char *key;
+    char *shm, *s;
+	
+	//struct exits Out;
+    /*
+     * We'll name our shared memory segment
+     * "SHM_TEST".
+     */
+    key = "SHM_TEST";
+    /*
+     * Using *key="SHM_TEST" and both creating and setting to read and write
+     * Read and write for owner, group (0660)
+     * Fail if negative int is returned
+     */
+	if ((shm_fd = shm_open(key, O_CREAT | O_RDWR, 0660)) < 0)
+    {
+        perror("shm_open");
+        exit(1);
+    }
+	/*
+     * Configure the size of the shared memory segment to 2920 bytes
+     */
+    ftruncate(shm_fd, SHMSZ);
+    
+    if ((shm = mmap(0, SHMSZ, PROT_WRITE, MAP_SHARED, shm_fd, 0)) == (char *)-1)
+    {
+        perror("mmap");
+        exit(1);
+    }
+    level lev[Num_Of_Level];
+    entry In[Num_Of_Entries];
+	exits Out[Num_Of_Exits];
+	for(int m=0;m<Num_Of_Entries;m++){
+		s=shm+288*m;								//Entry LPR Mutex
+		In[m].LPR_mutex=(pthread_mutex_t*)s;
+		s=shm+40+288*m;								//Entry LPR Condition Variable
+		In[m].LPR_cond=(pthread_cond_t*)s;
+		s=shm+(88+288*m);							//Entry LPR Values 
+		for(int i=0;i<6;i++){
+			In[m].lpr[i]=s;
+			s++;
+		}
+		s=shm+96+288*m;								//Entry Boomgate Mutex
+		In[m].boomgate_mutex=(pthread_mutex_t*)s;
+		s=shm+136+288*m;							//Entry Boomgate Condition Variable
+		In[m].boomgate_cond=(pthread_cond_t*)s;
+		s=shm+184+288*m;							//Entry Boomgate status
+		In[m].boomgate=s;
+		s=shm+192+288*m;							//Entry Display Mutex
+		In[m].info_mutex=(pthread_mutex_t*)s;
+		s=shm+232+288*m;							//Entry Display Condition Variable
+		In[m].info_cond=(pthread_cond_t*)s;
+		s=shm+280+288*m;   							//Entry Display status
+		In[m].display=s;
+	}
+	for(int m=0;m<Num_Of_Exits;m++){
+		s=shm+1440+192*m;							//Exit LPR Mutex
+		Out[m].LPR_mutex=(pthread_mutex_t*)s;
+		s=shm+1440+40+192*m;						//Exit LPR Condition Variable
+		Out[m].LPR_cond=(pthread_cond_t*)s;
+		s=shm+1440+88+192*m;						//Exit LPR Values
+		for(int i=0;i<6;i++){
+			Out[m].lpr[i]=s;
+			s++;
+		}
+		s=shm+1440+96+192*m;						//Exit Boomgate Mutex
+		Out[m].boomgate_mutex=(pthread_mutex_t*)s;
+		s=shm+1440+136+192*m;						//Exit Boomgate Condition Variable
+		Out[m].boomgate_cond=(pthread_cond_t*)s;
+		s=shm+1440+184+192*m;						//Exit Boomgate status
+		Out[m].boomgate=s;	}
+    for(int m=0;m<Num_Of_Level;m++){
+		s=shm+2400+104*m;							//Level LPR Mutex
+		lev[m].LPR_mutex=(pthread_mutex_t*)s;
+		s=shm+2400+40+104*m;						//Level LPR Condition Variable
+		lev[m].LPR_cond=(pthread_cond_t*)s;
+		s=shm+2400+88+104*m;						//Level LPR values
+		for(int i=0;i<6;i++){
+			lev[m].lpr[i]=s;
+			s++;
+		}
+		s=shm+2400+96+104*m;						//Level Temp Values
+		lev[m].temp=(int16_t*)s;
+		s=shm+2400+98+104*m;						//Level Alarm value
+		lev[m].alarm=s;
+	}
+	/*c='d';
+	for(int i=0;i<6;i++){
+			*In[2].lpr[i]=c;
+			c++;
+	}*/
+	return 0;
+}
