@@ -60,6 +60,7 @@ void *entry_init(void *shm){
 	s=shm+280+288*m;   							//Entry Display status
 	In[m].display=s;
 	printf("Success");
+	m++;
 }
 void *exit_init(void *shm){
 	char *s;
@@ -79,6 +80,7 @@ void *exit_init(void *shm){
 	s=shm+1440+184+192*n;						//Exit Boomgate status
 	Out[m].boomgate=s;	
 	printf("Success");
+	n++;
 }
 void *level_init(void *shm){
 	char *s;
@@ -96,6 +98,7 @@ void *level_init(void *shm){
 	s=shm+2400+98+104*o;						//Level Alarm value
 	lev[o].alarm=s;
 	printf("Success");
+	o++;
 }
 
 int main()
