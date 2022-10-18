@@ -133,7 +133,7 @@ void init_threads(void *shm){
 		}
 	}
 	while((m+n+o)!=12){}
-	for(int a=0;a<Num_Of_Entries;a++){
+	/*for(int a=0;a<Num_Of_Entries;a++){
 		if((pthread_create(&en[a],NULL,&entry_init,shm))!=0){
 			perror("Entry thread failed creation");
 		}
@@ -143,7 +143,7 @@ void init_threads(void *shm){
 		if((pthread_create(&le[a],NULL,&level_init,shm))!=0){
 			perror("Entry thread failed creation");
 		}
-	}
+	}*/
 	/* LPR*3
 	 * Boom*2
 	 * Display
