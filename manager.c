@@ -17,11 +17,11 @@
 
 int fd;
 parking_data_t *shm; // Initilize Shared Memory Segment
-int inloop,outloop,boomloop;
-pthread_mutex_t hash=PTHREAD_MUTEX_INITIALIZER,incount=PTHREAD_MUTEX_INITIALIZER;
-char *cars[5]; 
-pthread_cond_t hashadd=PTHREAD_COND_INITIALIZER;
-
+int inloop,inloop2;
+int counter=0;
+pthread_mutex_t hash=PTHREAD_MUTEX_INITIALIZER, hashing=PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t hashadd = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t full=PTHREAD_MUTEX_INITIALIZER;
 
 // Function Help from https://qnaplus.com/c-program-to-sleep-in-milliseconds/ Author: Srikanta
 // Input microseconds
@@ -32,6 +32,11 @@ void threadSleep(long tms)
 
 bool check_plate(char* cars){
 	// Get file pointer
+    
+    if(cars==NULL){
+		return false;
+	}
+    
     FILE *plates = (FILE *)malloc(sizeof(FILE *));
 	
     // Open file
@@ -141,24 +146,21 @@ void *display_sign(void *arg){
      } 
      return 0;
 }
-void *lpr_ins(){
-	while(true){
-	char* howdy=(char*)malloc(7*sizeof(char));
-	howdy=generateNumberPlate();
-	if(check_plate(howdy)){
-		strcpy(shm->entrys[inloop].lpr,howdy);
-		pthread_cond_signal(&hashadd);
-		threadSleep(1000);
-	}
-	else{
-		
-		
-	}
-	free(howdy);
-	inloop++;
-	inloop=inloop%5;
+void *lpr_ins(void *j){
+	int x=*(int*)j;
 	
-
+	while(true){
+	pthread_mutex_lock(&hashing);
+	
+	if(check_plate(shm->entrys[x].lpr)){		
+		inloop=x;
+		
+		pthread_cond_signal(&hashadd);
+		
+		pthread_cond_wait(&hashadd,&hash);
+	}
+	else{}
+	pthread_mutex_unlock(&hashing);
 	}
 	return 0;
 }
@@ -170,42 +172,87 @@ void *lpr_outs(){
 		
 	return 0;
 }
+void hashview(htable_t *hashTable){
+	while(true){
+		//htable_print(hashTable);
+		sleep(1);
+		//system("clear");
+	}
+}
 
+void *ins(void *j){
+	int a=*(int*)j;
+	bool c;
+	while(true){
+	pthread_mutex_lock(&full);
+	char* howdy=(char*)calloc(6,sizeof(char));
+	howdy=generateNumberPlate();
+	c=check_plate(howdy);
+	if(c && counter<100){
+		inloop2=a;
+		printf("post check %s\n",howdy);
+		counter++;
+		printf("count %d\n",counter);
+		strcpy(shm->entrys[a].lpr,howdy);
+	}
+	else{
+		break;
+	}
+	}
+	pthread_mutex_unlock(&full);
+	sleep(1);
+	return 0;
+}
 
 int main()
 {
 	struct htable *hashtable=(htable_t*)malloc(sizeof(htable_t));
 	
-	pthread_t lpr_in,lpr_out, boom;//, hash_in, hash_out;
+	pthread_t lpr_in[5],lpr_out, boom,hasht, in2[5];//, hash_in, hash_out;
 	
     parking_data_t parking; // Initilize parking segment
     
     // Map Parking Segment to Memory and retrive address.
     shm = read_shared_memory(&parking);
-	int in, out, boom_ret;
+	int in, out, boom_ret, balls;
 	/*int run;
 	pthread_t display;
 	if((run=pthread_create(&display, NULL, display_sign, shm)) !=0){
 		perror("Well shit");
 	}*/
+	
 	htable_init(hashtable,(size_t)5);
-	if((in = pthread_create(&lpr_in, NULL, lpr_ins, NULL))!=0){
+	for(int i=0;i<5;i++){
+		int *x=malloc(sizeof(int));
+		*x=i;
+		if((in = pthread_create(&lpr_in[i], NULL, lpr_ins, x))!=0){
 		perror("lpr_in fail");
 		};
+	}
+	for(int k=0;k<5;k++){
+		int *j=malloc(sizeof(int));
+		*j=k;
+		if((balls = pthread_create(&in2[k], NULL, ins, j))!=0){
+		perror("lpr_in fail");
+		};
+	}
+	
 	if((out = pthread_create(&lpr_out, NULL, lpr_outs, NULL))!=0){
 		perror("lpr_out fail");
 		};
 	if((boom_ret = pthread_create(&boom, NULL, booms, NULL))!=0){
 		perror("boom fail");
 		};
-	
+	if((pthread_create(&hasht, NULL, (void*)hashview, hashtable))!=0){
+		perror("boom fail");
+		};
 	while(true){
-		pthread_cond_wait(&hashadd, &hash);
-			if((htable_find(hashtable, shm->entrys[inloop].lpr))==NULL){
-				htable_add(hashtable, shm->entrys[inloop].lpr);
-			}
-		htable_print(hashtable);
-
+		pthread_cond_wait(&hashadd,&hash);
+		if((htable_find(hashtable, shm->entrys[inloop].lpr))==NULL){
+			htable_add(hashtable, shm->entrys[inloop].lpr);
+			*shm->entrys[inloop].lpr=0;
+		}
+		pthread_cond_signal(&hashadd);
 	}
 
 	
