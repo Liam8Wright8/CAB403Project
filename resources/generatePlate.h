@@ -1,136 +1,270 @@
-#ifndef GENERATE_PLATE
-#define GENERATE_PLATE
-
-#include <stdio.h>
+#ifndef HASH_TABLE
+#define HASH_TABLE
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <math.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 
-#define SHMSZ 2920
-#define Num_Of_Entries 5
-#define Num_Of_Exits 5
-#define Num_Of_Level 5
-#define Max_Per_Level 20
-
-// Mutex for random numbers
-pthread_mutex_t rand_mutex;
-pthread_cond_t rand_cond;
-
-int randomNumber()
+// Hashtable for parked cars
+typedef struct car car_t;
+struct car
 {
-    // Init mutex
-    pthread_mutex_init(&rand_mutex, NULL);
-    // Lock mutex
-    pthread_mutex_lock(&rand_mutex);
-    // Get random number
-    int random = rand() % 100;
-    // Unlock mutex for next call to function
-    pthread_mutex_unlock(&rand_mutex);
-    return random;
+    // Plate details - plate used as key
+    char *plate;
+
+    // Next parked car in hashtable
+    car_t *next;
+    
+    double tv;
 };
 
-// Number plate generator
-char *generateNumberPlate()
+// Define the hashtable itself
+typedef struct htable htable_t;
+struct htable
 {
+    // Arrays for cars
+    car_t **buckets;
+    // Size of hashtable
+    size_t size;
+    int counts[5];
+};
 
-    // Need to create hash table for generated plates
+int summing(htable_t *hashTable){
+	int sum=0;
+	int counting=0;
+	while(counting<hashTable->size){
+		sum+=hashTable->counts[counting];
+		counting++;
+	}
+	return sum;
+}
 
-    // Get file pointer
-    FILE *plates = (FILE *)malloc(sizeof(FILE *));
+bool has_room(htable_t *hashTable){
+	int sum_of=summing(hashTable);
+	if(sum_of<(hashTable->size*20)){
+		return true;
+	}
+	
+	return false;
+}
 
-    // Open file
-    plates = fopen("./resources/plates.txt", "r");
+// Print car for testing
+void car_print(car_t *car)
+{
+	char* balls=car->plate;
+    printf("plate=%s", balls);
+};
 
-    // Random numbe for testing
-    int rand = randomNumber();
+// Initialize the hashtable
+bool htable_init(htable_t *hashTable, size_t n)
+{
+    // Allocate size of hashtable - how many buckets
+    hashTable->size = n;
+    // Reset buckets to be 0's
+    hashTable->buckets = (car_t **)calloc(n, sizeof(car_t *));
+    // Test if calloc has reset buckets and return
+    return hashTable->buckets != 0;
+};
 
-    // 50/50 whether car from list
-    if (rand % 2 == 0)
+// Hashing function
+// Popular hashing function fount on ln47 of hashtable_search.c from week 5 pracs
+size_t djb_hash(char *s)
+{
+    size_t hash = 5381;
+    int c;
+    while ((c = *s++) != '\0')
     {
-
-        // Pick from list
-        // Get random number under 100
-        rand = randomNumber() % 100;
-        // Counter for choosing random plate from  file
-        int counter = 0;
-        int charCounter = 0;
-        // String in progress
-        char *numberPlate = (char *)calloc(6, sizeof(char));
-        char *c = malloc(sizeof(c));
-        // // Loop through all characters in plates
-        for (*c = getc(plates); *c != EOF; *c = getc(plates))
-        {
-
-            // Get number of chars
-            charCounter++;
-
-            // If not new line char, add to string
-            if (*c != '\n')
-            {
-                // Add char to string
-                strncat(numberPlate, c, 1);
-            }
-            else
-            {
-                // Increment num lines
-                counter++;
-
-                // Return a number plate after a random number of lines under
-                if (counter == rand)
-                {
-
-                    // Return current - after it is used it needs to be freed
-                    return numberPlate;
-                }
-
-                // If not returning numberPlate, reset it
-                memset(numberPlate, 0, (sizeof(char) * 6));
-                // Reset pointer
-                rewind(plates);
-            }
-        }
-
-        // Close connection and free memory
-        fclose(plates);
-        free(plates);
-        free(c);
+        // hash = hash * 33 + c
+        hash = ((hash << 5) + hash) + c;
     }
-    else
+    return hash;
+};
+
+// Find hash offset for new entry in hashtable
+size_t htable_index(htable_t *hashTable, char *plate)
+{
+    // Return hashed number / buckets remainder
+    return djb_hash(plate) % hashTable->size;
+};
+
+// Get the bucket of car with plate
+car_t *htable_bucket(htable_t *hashTable, char *plate)
+{
+    // Get pointer to correct bucket that has car in it
+    return hashTable->buckets[htable_index(hashTable, plate)];
+};
+
+// Find car in hashtable
+// PRE: true
+// POST: Return NULL if not found OR return *car to car with plate
+car_t *htable_find(htable_t *hashTable, char *key)
+{
+    // Start loop at first element in bucket that the key would be in
+    for (car_t *i = htable_bucket(hashTable, key); i != NULL; i = i->next)
     {
-        // Randommly generated number plate
-        // ASCII limits for char
-        int alphabetStart = 65;
-        int alphabetEnd = 90;
-
-        // ASCII limits for numbers
-        int numStart = 48;
-        int numEnd = 57;
-
-        // Init number plate
-        char *numberPlate = (char *)malloc(6 * sizeof(int));
-
-        // Numbers for the first 3
-        for (int i = 0; i < 3; i++)
+        // Test if key of current car is == to searched key
+        if (strcmp(i->plate, key) == 0)
         {
-            numberPlate[i] = (randomNumber() % (numEnd - numStart)) + numStart;
+            return i;
         }
-
-        // Alphatbet chars for the last 3
-        for (int i = 3; i < 6; i++)
-        {
-            numberPlate[i] = (randomNumber() % (alphabetEnd - alphabetStart)) + alphabetStart;
-        }
-
-        // Memory needs to be freed when car leaves
-        return (numberPlate);
     }
     return NULL;
 };
+
+// Add to hashtable
+// PRE: htable_find(hashTable, key) == NULL
+// POST: htable_find(hashTable, key) != NULL OR return false
+bool htable_add(htable_t *hashTable, char *plate)
+{
+	size_t bucket = htable_index(hashTable, plate);
+	/*if(hashTable->counts[bucket]>19){
+		return false;
+	}*/
+    // Create new head for hashtable bucket
+    car_t *newHead = (car_t *)malloc(sizeof(car_t));
+    // Check if newHead has been allocated
+    if (newHead == NULL)
+    {
+        return false;
+    }
+	struct timeval tv;
+    // Get bucket
+    gettimeofday(&tv, NULL);
+	newHead->tv = (tv.tv_sec)/1000 ; // convert tv_sec & tv_usec to millisecond
+	//printf(" %.1lf \n",newHead->tv);
+    printf(" |%s| please go to floor: %zu\n", plate, bucket);
+	
+
+    // Shuffle current head along
+    newHead->next = hashTable->buckets[bucket];
+	
+
+	hashTable->counts[bucket]++;
+	// Assign value to newHead
+	
+    newHead->plate = strdup(plate);
+    // Assign new car to bucket
+    hashTable->buckets[bucket] = newHead;
+    
+    return true;
+};
+
+// Print the hash table.
+// PRE: true
+// POST: hash table is printed to screen
+void htable_print(htable_t *hashTable)
+{
+    printf("hash table with %d buckets\n", (int)hashTable->size);
+    for (size_t i = 0; i < hashTable->size; ++i)
+    {
+        printf("bucket %d: ", (int)i);
+        if (hashTable->buckets[i] == NULL)
+        {
+            printf("empty\n");
+        }
+        else
+        {
+            for (car_t *j = hashTable->buckets[i]; j != NULL; j = j->next)
+            {
+                car_print(j);
+                if (j->next != NULL)
+                {
+                    printf(" -> ");
+                }
+            }
+            printf("\n");
+            
+        }
+    }
+    
+}
+
+// Delete item from hashtable
+// PRE: htabl_find(hashTable, key) != NULL
+// POST: htabl_find(hashTable, key) == NULL
+void htable_delete(htable_t *hashTable, char *plate)
+{
+
+    // Init variables for head of bucket, current and previous for looping through table
+    car_t *head = htable_bucket(hashTable, plate);
+    // Current begins at head of bucket
+    car_t *current = head;
+    // Init previous to NULL, will be adjusted through loop
+    car_t *previous = NULL;
+
+    // Loop through until reach end of bucket
+    while (current != NULL)
+    {
+        // Check to see if plates match
+        if (strcmp(current->plate, plate) == 0)
+        {
+            // If car is first in list
+            if (previous == NULL)
+            {
+                hashTable->buckets[htable_index(hashTable, plate)] = current->next;
+            }
+            else
+            {
+                previous->next = current->next;
+            }
+
+            // Free allocated memory
+            free(current);
+            free(plate);
+            break;
+        }
+
+        // Increment current & previous
+        previous = current;
+        current = current->next;
+    }
+};
+
+// htable_destroy
+// Pre: htable_init(hashTable)
+// POST: No memory allocated for hash table
+void htable_destroy(htable_t *hashTable)
+{
+    // Free the linked lists
+    for (size_t i = 0; i < hashTable->size; ++i)
+    {
+        car_t *bucket = hashTable->buckets[i];
+        while (bucket != NULL)
+        {
+            car_t *next = bucket->next;
+            free(bucket);
+            bucket = next;
+        }
+    }
+
+    // free buckets array
+    free(hashTable->buckets);
+    hashTable->buckets = NULL;
+    hashTable->size = 0;
+}
+
+// Iterates through each bucket of hashtable 'h', printing out keys with value 'search'
+// pre: htab_init(h)
+// post: each key with value 'search' has been printed to stdout
+void htable_search_value(htable_t *hashTable, char *search)
+{
+    for (size_t i = 0; i < hashTable->size; ++i)
+    {
+        for (car_t *bucket = hashTable->buckets[i]; bucket != NULL; bucket = bucket->next)
+        {
+            if (bucket->plate == search)
+                printf("%s ", bucket->plate);
+        }
+    }
+    printf("\n");
+}
 
 #endif
