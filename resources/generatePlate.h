@@ -24,12 +24,11 @@ pthread_cond_t rand_cond;
 
 int randomNumber()
 {
-    // Init mutex
     pthread_mutex_init(&rand_mutex, NULL);
     // Lock mutex
     pthread_mutex_lock(&rand_mutex);
     // Get random number
-    int random = rand() % 100;
+    int random = (rand() % 100)+1;
     // Unlock mutex for next call to function
     pthread_mutex_unlock(&rand_mutex);
     return random;
@@ -40,66 +39,36 @@ char *generateNumberPlate()
 {
 
     // Need to create hash table for generated plates
-
     // Get file pointer
     FILE *plates = (FILE *)malloc(sizeof(FILE *));
 
     // Open file
     plates = fopen("./resources/plates.txt", "r");
-
+	// Init mutex
+    pthread_mutex_lock(&rand_mutex);
     // Random numbe for testing
     int rand = randomNumber();
-
+	
     // 50/50 whether car from list
     if (rand % 2 == 0)
     {
-
         // Pick from list
         // Get random number under 100
-        rand = randomNumber() % 100;
+        int rand2 = randomNumber() % 100;
         // Counter for choosing random plate from  file
         int counter = 0;
-        int charCounter = 0;
-        // String in progress
-        char *numberPlate = (char *)calloc(6, sizeof(char));
-        char *c = malloc(sizeof(c));
-        // // Loop through all characters in plates
-        for (*c = getc(plates); *c != EOF; *c = getc(plates))
-        {
-
-            // Get number of chars
-            charCounter++;
-
-            // If not new line char, add to string
-            if (*c != '\n')
-            {
-                // Add char to string
-                strncat(numberPlate, c, 1);
-            }
-            else
-            {
-                // Increment num lines
-                counter++;
-
-                // Return a number plate after a random number of lines under
-                if (counter == rand)
-                {
-
-                    // Return current - after it is used it needs to be freed
-                    return numberPlate;
-                }
-
-                // If not returning numberPlate, reset it
-                memset(numberPlate, 0, (sizeof(char) * 6));
-                // Reset pointer
-                rewind(plates);
-            }
-        }
-
+			// Open file
+		char* numplate= (char*)malloc(6*sizeof(char));
+		while((fgets(numplate, 7, plates))!=0){
+			counter++;
+			if(counter==(rand2*2)+1){		
+				return numplate;
+			}
+			
+		}
         // Close connection and free memory
         fclose(plates);
-        free(plates);
-        free(c);
+        return NULL;
     }
     else
     {
@@ -113,7 +82,7 @@ char *generateNumberPlate()
         int numEnd = 57;
 
         // Init number plate
-        char *numberPlate = (char *)malloc(6 * sizeof(int));
+        char *numberPlate = (char *)malloc(7 * sizeof(char));
 
         // Numbers for the first 3
         for (int i = 0; i < 3; i++)
@@ -126,8 +95,9 @@ char *generateNumberPlate()
         {
             numberPlate[i] = (randomNumber() % (alphabetEnd - alphabetStart)) + alphabetStart;
         }
-
         // Memory needs to be freed when car leaves
+        
+        numberPlate[6]='\0';
         return (numberPlate);
     }
     return NULL;
