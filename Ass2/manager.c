@@ -16,49 +16,18 @@
 
 
 int fd;
-int i=0,add=0;
-int notFull=0;
 parking_data_t *shm; // Initilize Shared Memory Segment
-pthread_mutex_t addMutex=PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t numMutex=PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t hashMutex=PTHREAD_MUTEX_INITIALIZER;
-//pthread_mutex_t finishMutex=PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t addCond=PTHREAD_COND_INITIALIZER;
-//pthread_cond_t finishCond=PTHREAD_COND_INITIALIZER;
+int inloop,inloop2;
+int counter=0;
+pthread_mutex_t hash=PTHREAD_MUTEX_INITIALIZER, hashing=PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t hashadd = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t full=PTHREAD_MUTEX_INITIALIZER;
+
 // Function Help from https://qnaplus.com/c-program-to-sleep-in-milliseconds/ Author: Srikanta
 // Input microseconds
 void threadSleep(long tms)
 {
     usleep(tms * 1000);
-}
-
-void *display_sign(void *arg){
-	//parking_data_t *shm = (parking_data_t*)arg;
-	for (;;)
-    {
-         // Display Entrances
-         printf("----------------ENTRANCES--------------\n");
-         for(int i=0; i<5; i++){
-			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->entrys[i].lpr, shm->entrys[i].boomgate);
-		 }    
-         printf("---------------------------------------\n");
-         // Display Exits
-         printf("------------------EXITS----------------\n");
-         for(int i=0; i<5; i++){
-			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->exits[i].lpr, shm->exits[i].boomgate);
-		 }
-         printf("---------------------------------------\n");
-         // Display Temperature
-         printf("              ----TEMP---\n");
-         for(int i=0; i<5; i++){
-         printf("              LEVEL %d : %dC\n", i, shm->levels[i].temp);
-			 
-		 }
-         printf("---------------------------------------\n");        
-         threadSleep(10); // Updates Every 'x' amount of milliseconds
-         system("clear");
-     } 
-     return 0;
 }
 
 bool check_plate(char* cars){
@@ -85,6 +54,41 @@ bool check_plate(char* cars){
 	}
     fclose(plates);
     return false;
+}
+
+// TESTING BOOMGATE COMMUNICATION WITH SIMULATOR ON EXIT 1
+// CHANGE THE INDEX TO WHATEVER NUMBER YOU WANT TO TEST
+void testBoomgate()
+
+{
+    // TEST BOOMGATE OPENING
+    printf("RAISING BOOMGATE...\n");
+    pthread_mutex_lock(&shm->exits[0].boomgate_mutex);
+    shm->exits[0].boomgate = 'R';
+    pthread_cond_broadcast(&shm->exits[0].boomgate_cond);
+    pthread_mutex_unlock(&shm->exits[0].boomgate_mutex);
+    printf("Current Status of BOOMGATE %c\n\n", shm->exits[0].boomgate);
+
+    // CAR CAN ONLY DRIVE IN WHEN GATE IS OPEN
+    printf("WAITING ON BOOMGATE TO BE OPENED...\n");
+    while (shm->exits[0].boomgate == 'R')
+    {
+        pthread_cond_wait(&shm->exits[0].boomgate_cond, &shm->exits[0].boomgate_mutex);
+    }
+    if (shm->exits[0].boomgate == 'O')
+    {
+        printf("CAR DRIVING IN\n\n");
+        threadSleep(10); // Ten Milliseconds for car to drive in
+    }
+    // TEST BOOMGATE CLOSING
+    printf("LOWERING BOOMGATE...\n");
+    pthread_mutex_lock(&shm->exits[0].boomgate_mutex);
+    shm->exits[0].boomgate = 'L';
+    pthread_cond_broadcast(&shm->exits[0].boomgate_cond);
+    pthread_mutex_unlock(&shm->exits[0].boomgate_mutex);
+    printf("BOOMGATE IS CLOSED\n");
+    sleep(1);
+    printf("Current Status of BOOMGATE %c\n", shm->exits[0].boomgate);
 }
 
 // Read Shared Memory segment on startup.
@@ -114,105 +118,155 @@ void *read_shared_memory(parking_data_t *shm)
     return shm;
 }
 
-int total=0;
-
-void *addToHash(void *hashpointer){
-	htable_t *hash=hashpointer;
-	pthread_mutex_lock(&numMutex);
-	int a=add;
-	add++;
-	pthread_mutex_unlock(&numMutex);
-	while(has_room(hash)){
-	pthread_cond_wait(&shm->entrys[a].LPR_cond,&shm->entrys[a].LPR_mutex);
-	//pthread_mutex_lock(&hashMutex);
-	shm->entrys[a].boomgate='R';
-	threadSleep(100);
-	shm->entrys[a].boomgate='O';
-	if(check_plate(shm->entrys[a].lpr)){
-		if(htable_find(hash,shm->entrys[a].lpr)==NULL){
-			htable_add(hash,shm->entrys[a].lpr);
-			//printf("%d\n",total);
-			}
-		}
-	*shm->entrys[a].lpr=0;
-	threadSleep(100);
-	shm->entrys[a].boomgate='L';
-	threadSleep(100);
-	shm->entrys[a].boomgate='C';
-		//pthread_mutex_unlock(&hashMutex);
+void *display_sign(void *arg){
+	//parking_data_t *shm = (parking_data_t*)arg;
+	for (;;)
+    {
+         // Display Entrances
+         printf("----------------ENTRANCES--------------\n");
+         for(int i=0; i<5; i++){
+			 printf("LEVEL 1 LPR: %s     |     LEVEL 1 BG: %c\n", shm->entrys[i].lpr, shm->entrys[i].boomgate);
+		 }    
+         printf("---------------------------------------\n");
+         // Display Exits
+         printf("------------------EXITS----------------\n");
+         for(int i=0; i<5; i++){
+			 printf("LEVEL 1 LPR: %s     |     LEVEL 1 BG: %c\n", shm->exits[i].lpr, shm->exits[i].boomgate);
+		 }
+         printf("---------------------------------------\n");
+         // Display Temperature
+         printf("              ----TEMP---\n");
+         for(int i=0; i<5; i++){
+         printf("              LEVEL 1 : %dC\n", shm->levels[i].temp);
+			 
+		 }
+         printf("---------------------------------------\n");        
+         threadSleep(100); // Updates Every 'x' amount of milliseconds
+         system("clear");
+     } 
+     return 0;
+}
+void *lpr_ins(void *j){
+	int x=*(int*)j;
+	
+	while(true){
+	pthread_mutex_lock(&hashing);
+	
+	if(check_plate(shm->entrys[x].lpr)){		
+		inloop=x;
+		
+		pthread_cond_signal(&hashadd);
+		
+		pthread_cond_wait(&hashadd,&hash);
 	}
-	notFull++;
+	else{}
+	pthread_mutex_unlock(&hashing);
+	}
 	return 0;
 }
+void *lpr_outs(){
 
-void *gen_plates(void *hashpointer){
-	htable_t *hash=hashpointer;
-	int i=0;
-	while(notFull==0){
-		while(*shm->entrys[i].lpr!=0){
-			printf("%d\n",i);
-			threadSleep(10);
-		}
-		i=randomNumber()%5;
-		char* randPlate=(char*)malloc(6*sizeof(char));
-		randPlate=generateNumberPlate();
-		if(htable_find(hash,randPlate)!=NULL){
-			
-		}
-		else{
-			strncpy(shm->entrys[i].lpr,randPlate,6);
-			if(!pthread_cond_signal(&shm->entrys[i].LPR_cond)){
-			}
-			else{
-				perror("Signal failed\n");
-			}
-		}
-		threadSleep(1000);
-		free(randPlate);
+	return 0;
+}
+	void *booms(void *arg){
+		
+	return 0;
+}
+void hashview(htable_t *hashTable){
+	while(true){
+		//htable_print(hashTable);
+		sleep(1);
+		//system("clear");
 	}
-	
+}
+
+void *ins(void *j){
+	int a=*(int*)j;
+	bool c;
+	while(true){
+	pthread_mutex_lock(&full);
+	char* howdy=(char*)calloc(6,sizeof(char));
+	howdy=generateNumberPlate();
+	c=check_plate(howdy);
+	if(c && counter<100){
+		inloop2=a;
+		printf("post check %s\n",howdy);
+		counter++;
+		printf("count %d\n",counter);
+		strcpy(shm->entrys[a].lpr,howdy);
+	}
+	else{
+		break;
+	}
+	}
+	pthread_mutex_unlock(&full);
+	sleep(1);
 	return 0;
 }
 
 int main()
 {
-	htable_t *hashtable=(htable_t*)malloc(sizeof(htable_t));
-	pthread_t entThreads[Num_Of_Entries], addThreads;
+	struct htable *hashtable=(htable_t*)malloc(sizeof(htable_t));
+	
+	pthread_t lpr_in[5],lpr_out, boom,hasht, in2[5];//, hash_in, hash_out;
+	
     parking_data_t parking; // Initilize parking segment
+    
     // Map Parking Segment to Memory and retrive address.
     shm = read_shared_memory(&parking);
-	for(int l=0;l<5;l++){
-		*shm->entrys[l].lpr=0;
-	}
-	
-	htable_init(hashtable,(size_t)Num_Of_Level);
-	
-	for(int m=0;m<Num_Of_Entries;m++){
-		if(pthread_create(&entThreads[m],NULL,addToHash,hashtable)){
-			perror("Entrance Threads Failed");
-		}
-	}
-	if(pthread_create(&addThreads,NULL,gen_plates,hashtable)){
-		perror("Hash Threads Failed");
-	}
-	int run;
+	int in, out, boom_ret, balls;
+	/*int run;
 	pthread_t display;
 	if((run=pthread_create(&display, NULL, display_sign, shm)) !=0){
 		perror("Well shit");
+	}*/
+	
+	htable_init(hashtable,(size_t)5);
+	for(int i=0;i<5;i++){
+		int *x=malloc(sizeof(int));
+		*x=i;
+		if((in = pthread_create(&lpr_in[i], NULL, lpr_ins, x))!=0){
+		perror("lpr_in fail");
+		};
 	}
-	while(has_room(hashtable)){
-		//htable_print(hashtable);
-		sleep(1);
-		//system("clear");
+	for(int k=0;k<5;k++){
+		int *j=malloc(sizeof(int));
+		*j=k;
+		if((balls = pthread_create(&in2[k], NULL, ins, j))!=0){
+		perror("lpr_in fail");
+		};
 	}
-	htable_print(hashtable);
+	
+	if((out = pthread_create(&lpr_out, NULL, lpr_outs, NULL))!=0){
+		perror("lpr_out fail");
+		};
+	if((boom_ret = pthread_create(&boom, NULL, booms, NULL))!=0){
+		perror("boom fail");
+		};
+	if((pthread_create(&hasht, NULL, (void*)hashview, hashtable))!=0){
+		perror("boom fail");
+		};
+	while(true){
+		pthread_cond_wait(&hashadd,&hash);
+		if((htable_find(hashtable, shm->entrys[inloop].lpr))==NULL){
+			htable_add(hashtable, shm->entrys[inloop].lpr);
+			*shm->entrys[inloop].lpr=0;
+		}
+		pthread_cond_signal(&hashadd);
+	}
+
+	
+	
     // USED TO TEST BOOMGATES. RUN THIS WITH SIM RUNNING ALREADY
     // testBoomgate();
-	
+
     if ((munmap(shm, SHMSZ)) == -1)
     {
         perror("munmap failed");
     }
     htable_destroy(hashtable);
+	pthread_mutex_destroy(&hash);
+	pthread_cond_destroy(&hashadd);
+    close(fd);
     return 0;
 }

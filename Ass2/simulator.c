@@ -63,7 +63,7 @@ void *runEntryBG(void *arg)
 
             printf("Boomgate at EntranceBG '%d' is Rising...\n", num + 1);
             printf("Status of Entrance BG: %d is %c \n\n ", num + 1, shm->entrys[num].boomgate);
-            threadSleep(10); // Wait 10ms for gate to open
+            threadSleep(200); // Wait 10ms for gate to open
 
             // SET BOOMGATE TO OPEN
             shm->entrys[num].boomgate = 'O';
@@ -78,7 +78,7 @@ void *runEntryBG(void *arg)
         {
             printf("Boomgate at EntranceBG '%d' is Lowering...\n", num + 1);
             printf("Status of Entrance BG: %d is %c \n\n ", num + 1, shm->entrys[num].boomgate);
-            threadSleep(10); // Wait 10ms for gate to close
+            threadSleep(200); // Wait 10ms for gate to close
 
             // SET BOOMGATE TO CLOSED
             shm->entrys[num].boomgate = 'C';
@@ -124,7 +124,7 @@ void *runExitBG(void *arg)
         {
             printf("Boomgate at ExitBG '%d' is Lowering...\n", num + 1);
             printf("Status of ExitBG BG: %d is %c \n\n ", num + 1, shm->exits[num].boomgate);
-            threadSleep(1000); // Wait 10ms for gate to close
+            threadSleep(10); // Wait 10ms for gate to close
 
             // SET BOOMGATE TO CLOSED
             shm->exits[num].boomgate = 'C';

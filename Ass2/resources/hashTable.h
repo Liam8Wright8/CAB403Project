@@ -14,8 +14,8 @@
 #include <string.h>
 
 // Hashtable for parked cars
-typedef struct car
-{
+typedef struct car car_t;
+struct car{
     // Plate details - plate used as key
     char *plate;
 
@@ -23,18 +23,18 @@ typedef struct car
     car_t *next;
     
     double tv;
-}car_t;
+};
 
 // Define the hashtable itself
-typedef struct htable
-{
+
+struct htable{
     // Arrays for cars
     car_t **buckets;
     // Size of hashtable
     size_t size;
     int counts[5];
-}htable_t;
-
+};
+typedef struct htable htable_t;
 int summing(htable_t *hashTable){
 	int sum=0;
 	int counting=0;

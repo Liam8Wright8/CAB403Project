@@ -39,19 +39,19 @@ void *display_sign(void *arg){
          // Display Entrances
          printf("----------------ENTRANCES--------------\n");
          for(int i=0; i<5; i++){
-			 printf("LEVEL 1 LPR: %s     |     LEVEL 1 BG: %c\n", shm->entrys[i].lpr, shm->entrys[i].boomgate);
+			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->entrys[i].lpr, shm->entrys[i].boomgate);
 		 }    
          printf("---------------------------------------\n");
          // Display Exits
          printf("------------------EXITS----------------\n");
          for(int i=0; i<5; i++){
-			 printf("LEVEL 1 LPR: %s     |     LEVEL 1 BG: %c\n", shm->exits[i].lpr, shm->exits[i].boomgate);
+			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->exits[i].lpr, shm->exits[i].boomgate);
 		 }
          printf("---------------------------------------\n");
          // Display Temperature
          printf("              ----TEMP---\n");
          for(int i=0; i<5; i++){
-         printf("              LEVEL 1 : %dC\n", shm->levels[i].temp);
+         printf("              LEVEL %d : %dC\n", i, shm->levels[i].temp);
 			 
 		 }
          printf("---------------------------------------\n");        
@@ -124,16 +124,22 @@ void *addToHash(void *hashpointer){
 	pthread_mutex_unlock(&numMutex);
 	while(has_room(hash)){
 	pthread_cond_wait(&shm->entrys[a].LPR_cond,&shm->entrys[a].LPR_mutex);
-	pthread_mutex_lock(&hashMutex);
+	//pthread_mutex_lock(&hashMutex);
+	shm->entrys[a].boomgate='R';
+	threadSleep(100);
+	shm->entrys[a].boomgate='O';
 	if(check_plate(shm->entrys[a].lpr)){
 		if(htable_find(hash,shm->entrys[a].lpr)==NULL){
 			htable_add(hash,shm->entrys[a].lpr);
 			//printf("%d\n",total);
-			threadSleep(10);
 			}
 		}
-		*shm->entrys[a].lpr=0;
-		pthread_mutex_unlock(&hashMutex);
+	*shm->entrys[a].lpr=0;
+	threadSleep(100);
+	shm->entrys[a].boomgate='L';
+	threadSleep(100);
+	shm->entrys[a].boomgate='C';
+		//pthread_mutex_unlock(&hashMutex);
 	}
 	notFull++;
 	return 0;
@@ -143,6 +149,10 @@ void *gen_plates(void *hashpointer){
 	htable_t *hash=hashpointer;
 	int i=0;
 	while(notFull==0){
+		while(*shm->entrys[i].lpr!=0){
+			printf("%d\n",i);
+			threadSleep(10);
+		}
 		i=randomNumber()%5;
 		char* randPlate=(char*)malloc(6*sizeof(char));
 		randPlate=generateNumberPlate();
@@ -157,7 +167,7 @@ void *gen_plates(void *hashpointer){
 				perror("Signal failed\n");
 			}
 		}
-		threadSleep(10);
+		threadSleep(1000);
 		free(randPlate);
 	}
 	
@@ -166,7 +176,7 @@ void *gen_plates(void *hashpointer){
 
 int main()
 {
-	struct htable *hashtable=(htable_t*)malloc(sizeof(htable_t));
+	htable_t *hashtable=(htable_t*)malloc(sizeof(htable_t));
 	pthread_t entThreads[Num_Of_Entries], addThreads;
     parking_data_t parking; // Initilize parking segment
     // Map Parking Segment to Memory and retrive address.
