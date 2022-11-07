@@ -56,6 +56,7 @@ bool htable_init(htable_t *hashTable, size_t n)
 {
     // Allocate size of hashtable - how many buckets
     hashTable->size = n;
+    hashTable->counts=0;
     // Reset buckets to be 0's
     hashTable->buckets = (car_t **)calloc(n, sizeof(car_t *));
     // Test if calloc has reset buckets and return
