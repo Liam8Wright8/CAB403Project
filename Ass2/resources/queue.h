@@ -64,8 +64,6 @@ void initQueue(queue *queue)
 int isEmpty(queue *queue)
 
 {
-
-
     // return value based on count
 
     return (queue->count == 0);
@@ -75,7 +73,6 @@ int isEmpty(queue *queue)
 
 int queueSize(queue *queue)
 {
-
     // Return queue count variable
 
     return (queue->count);
@@ -227,32 +224,3 @@ char *removeFromQueue(queue *queue)
     }
 }
 
-// int main()
-
-// {
-
-//     queue *q;
-
-//     q = (queue *)malloc(sizeof(queue));
-
-//     initQueue(q);
-
-//     addToQueue(q, "Hello");
-
-//     addToQueue(q, "There");
-
-//     addToQueue(q, "Person");
-
-//     printf("Queue before dequeue\n");
-
-//     showQueue(q->front);
-
-//     removeFromQueue(q);
-
-//     printf("Queue after dequeue\n");
-
-//     showQueue(q->front);
-
-//     return 0;
-
-// }

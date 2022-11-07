@@ -34,6 +34,32 @@ int randomNumber()
     return random;
 };
 
+bool check_plate(char* cars){
+	// Get file pointer
+    
+    if(cars==NULL){
+		return false;
+	}
+    
+    FILE *plates = (FILE *)malloc(sizeof(FILE *));
+	
+    // Open file
+    plates = fopen("./resources/plates.txt", "r");
+    char* numplate=(char*)calloc(7,sizeof(char));
+    
+    if(plates == NULL){
+        return false;
+    }
+	while(fgets(numplate, 7, plates)!=NULL){
+		if(strcmp(numplate,cars)==0){
+		fclose(plates);
+		return true;
+		}
+	}
+    fclose(plates);
+    return false;
+}
+
 // Number plate generator
 char *generateNumberPlate()
 {

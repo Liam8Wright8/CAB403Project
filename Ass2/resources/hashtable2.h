@@ -1,66 +1,53 @@
-#ifndef HASH_TABLE
-#define HASH_TABLE
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <pthread.h>
+
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
+
+pthread_mutex_t htable_mutex;
 
 // Hashtable for parked cars
 typedef struct car car_t;
-struct car{
+struct car
+{
     // Plate details - plate used as key
     char *plate;
 
+    time_t *entry_time;
+
     // Next parked car in hashtable
     car_t *next;
-    
-    double tv;
 };
 
 // Define the hashtable itself
-
-struct htable{
+typedef struct htable htable_t;
+struct htable
+{
     // Arrays for cars
     car_t **buckets;
     // Size of hashtable
     size_t size;
-    int counts;
 };
-typedef struct htable htable_t;
-
-bool has_room(htable_t *hashTable){
-	if(hashTable->counts<100){
-		return true;
-	}
-	
-	return false;
-}
 
 // Print car for testing
 void car_print(car_t *car)
 {
-	char* balls=car->plate;
-    printf("plate=%s", balls);
-}
+    printf("plate=%s, Entry time:%ln", car->plate, car->entry_time);
+};
 
 // Initialize the hashtable
 bool htable_init(htable_t *hashTable, size_t n)
 {
+    pthread_mutex_lock(&htable_mutex);
     // Allocate size of hashtable - how many buckets
     hashTable->size = n;
     // Reset buckets to be 0's
-    hashTable->buckets = (car_t **)calloc(n, sizeof(car_t *));
+    hashTable->buckets = (car_t **)calloc(n, sizeof(car_t) * n);
     // Test if calloc has reset buckets and return
+    pthread_mutex_unlock(&htable_mutex);
     return hashTable->buckets != 0;
-}
+};
 
 // Hashing function
 // Popular hashing function fount on ln47 of hashtable_search.c from week 5 pracs
@@ -74,21 +61,21 @@ size_t djb_hash(char *s)
         hash = ((hash << 5) + hash) + c;
     }
     return hash;
-}
+};
 
 // Find hash offset for new entry in hashtable
 size_t htable_index(htable_t *hashTable, char *plate)
 {
     // Return hashed number / buckets remainder
     return djb_hash(plate) % hashTable->size;
-}
+};
 
 // Get the bucket of car with plate
 car_t *htable_bucket(htable_t *hashTable, char *plate)
 {
     // Get pointer to correct bucket that has car in it
     return hashTable->buckets[htable_index(hashTable, plate)];
-}
+};
 
 // Find car in hashtable
 // PRE: true
@@ -105,40 +92,38 @@ car_t *htable_find(htable_t *hashTable, char *key)
         }
     }
     return NULL;
-}
+};
 
 // Add to hashtable
 // PRE: htable_find(hashTable, key) == NULL
 // POST: htable_find(hashTable, key) != NULL OR return false
 bool htable_add(htable_t *hashTable, char *plate)
 {
-	size_t bucket = htable_index(hashTable, plate);
+    pthread_mutex_lock(&htable_mutex);
     // Create new head for hashtable bucket
     car_t *newHead = (car_t *)malloc(sizeof(car_t));
+
     // Check if newHead has been allocated
     if (newHead == NULL)
     {
         return false;
     }
-	struct timeval tv;
-    // Get bucket
-    gettimeofday(&tv, NULL);
-	newHead->tv = (tv.tv_usec)*1000 ; // convert tv_sec & tv_usec to millisecond
-	//printf(" %.1lf \n",newHead->tv);
-    printf(" |%s| please go to floor: %zu\n", plate, bucket);
-	
 
+    // printf("%s", plate);
+
+    // Get bucket
+    size_t bucket = htable_index(hashTable, plate);
     // Shuffle current head along
     newHead->next = hashTable->buckets[bucket];
-	hashTable->counts++;
-	// Assign value to newHead
-	
-    newHead->plate = strdup(plate);
+    // Assign value to newHead
+    newHead->plate = plate;
+    // Assign time value
+    // newHead->entry_time = localtime()
     // Assign new car to bucket
     hashTable->buckets[bucket] = newHead;
-    
+    pthread_mutex_unlock(&htable_mutex);
     return true;
-}
+};
 
 // Print the hash table.
 // PRE: true
@@ -164,31 +149,35 @@ void htable_print(htable_t *hashTable)
                 }
             }
             printf("\n");
-            
         }
     }
-    
 }
 
 // Delete item from hashtable
 // PRE: htabl_find(hashTable, key) != NULL
 // POST: htabl_find(hashTable, key) == NULL
-void htable_delete(htable_t *hashTable, char *plate)
+void htable_delete(htable_t *hashTable, char *plateInput)
 {
+    char *plate = plateInput;
 
+    pthread_mutex_lock(&htable_mutex);
     // Init variables for head of bucket, current and previous for looping through table
     car_t *head = htable_bucket(hashTable, plate);
     // Current begins at head of bucket
     car_t *current = head;
     // Init previous to NULL, will be adjusted through loop
     car_t *previous = NULL;
+
     // Loop through until reach end of bucket
-    
     while (current != NULL)
     {
+        printf("\n\n%s\n%s\n\n", current->plate, plate);
+
         // Check to see if plates match
-        if (strcmp(current->plate, plate) == 0)
+        if (strcmp(current->plate, plate))
         {
+            // printf("\n\n%s\n", plate);
+
             // If car is first in list
             if (previous == NULL)
             {
@@ -198,9 +187,10 @@ void htable_delete(htable_t *hashTable, char *plate)
             {
                 previous->next = current->next;
             }
+
             // Free allocated memory
             free(current);
-            free(plate);
+
             break;
         }
 
@@ -208,12 +198,13 @@ void htable_delete(htable_t *hashTable, char *plate)
         previous = current;
         current = current->next;
     }
-}
+    pthread_mutex_unlock(&htable_mutex);
+};
 
 // htable_destroy
 // Pre: htable_init(hashTable)
 // POST: No memory allocated for hash table
-void htable_destroy(htable_t *hashTable)
+void htable_destory(htable_t *hashTable)
 {
     // Free the linked lists
     for (size_t i = 0; i < hashTable->size; ++i)
@@ -233,20 +224,18 @@ void htable_destroy(htable_t *hashTable)
     hashTable->size = 0;
 }
 
-// Iterates through each bucket of hashtable 'h', printing out keys with value 'search'
-// pre: htab_init(h)
-// post: each key with value 'search' has been printed to stdout
-void htable_search_value(htable_t *hashTable, char *search)
-{
-    for (size_t i = 0; i < hashTable->size; ++i)
-    {
-        for (car_t *bucket = hashTable->buckets[i]; bucket != NULL; bucket = bucket->next)
-        {
-            if (bucket->plate == search)
-                printf("%s ", bucket->plate);
-        }
-    }
-    printf("\n");
-}
+// // Iterates through each bucket of hashtable 'h', printing out keys with value 'search'
+// // pre: htab_init(h)
+// // post: each key with value 'search' has been printed to stdout
+// void htable_search_value(htable_t *hashTable, char *search)
+// {
+//     for (size_t i = 0; i < hashTable->size; ++i)
+//     {
+//         for (car_t *bucket = hashTable->buckets[i]; bucket != NULL; bucket = bucket->next)
+//         {
+//             if (bucket->plate == search){
 
-#endif
+//             }
+//         }
+//     }
+// }

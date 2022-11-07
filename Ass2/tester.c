@@ -16,12 +16,14 @@
 
 
 int fd;
-int i=0,add=0;
+int i=0,add=0,gen=0;
 int notFull=0;
 parking_data_t *shm; // Initilize Shared Memory Segment
 pthread_mutex_t addMutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t numMutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t hashMutex=PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t genMutex=PTHREAD_MUTEX_INITIALIZER;
 //pthread_mutex_t finishMutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t addCond=PTHREAD_COND_INITIALIZER;
 //pthread_cond_t finishCond=PTHREAD_COND_INITIALIZER;
@@ -38,54 +40,40 @@ void *display_sign(void *arg){
     {
          // Display Entrances
          printf("----------------ENTRANCES--------------\n");
-         for(int i=0; i<5; i++){
-			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->entrys[i].lpr, shm->entrys[i].boomgate);
-		 }    
-         printf("---------------------------------------\n");
+         printf("LEVEL 1 LPR: %s     |     BG: %c   | 	Status: %c\n",shm->entrys[0].lpr, shm->entrys[0].boomgate,shm->entrys[0].display);
+         printf("LEVEL 2 LPR: %s     |     BG: %c   | 	Status: %c\n",shm->entrys[1].lpr, shm->entrys[1].boomgate,shm->entrys[1].display);
+         printf("LEVEL 3 LPR: %s     |     BG: %c   | 	Status: %c\n",shm->entrys[2].lpr, shm->entrys[2].boomgate,shm->entrys[2].display);
+         printf("LEVEL 4 LPR: %s     |     BG: %c   | 	Status: %c\n",shm->entrys[3].lpr, shm->entrys[3].boomgate,shm->entrys[3].display);
+         printf("LEVEL 5 LPR: %s     |     BG: %c   | 	Status: %c\n",shm->entrys[4].lpr, shm->entrys[4].boomgate,shm->entrys[4].display);
+		     
          // Display Exits
          printf("------------------EXITS----------------\n");
-         for(int i=0; i<5; i++){
-			 printf("LEVEL %d LPR: %s     |     LEVEL 1 BG: %c\n", i, shm->exits[i].lpr, shm->exits[i].boomgate);
-		 }
-         printf("---------------------------------------\n");
+         printf("LEVEL 1 LPR: %s     |     BG: %c\n", shm->exits[0].lpr, shm->exits[0].boomgate);
+         printf("LEVEL 2 LPR: %s     |     BG: %c\n", shm->exits[1].lpr, shm->exits[1].boomgate);
+         printf("LEVEL 3 LPR: %s     |     BG: %c\n", shm->exits[2].lpr, shm->exits[2].boomgate);
+         printf("LEVEL 4 LPR: %s     |     BG: %c\n", shm->exits[3].lpr, shm->exits[3].boomgate);
+         printf("LEVEL 5 LPR: %s     |     BG: %c\n", shm->exits[4].lpr, shm->exits[4].boomgate);
          // Display Temperature
          printf("              ----TEMP---\n");
-         for(int i=0; i<5; i++){
-         printf("              LEVEL %d : %dC\n", i, shm->levels[i].temp);
-			 
-		 }
-         printf("---------------------------------------\n");        
-         threadSleep(10); // Updates Every 'x' amount of milliseconds
+         printf("              LEVEL 1 : %dC\n", shm->levels[0].temp);	 
+         printf("              LEVEL 2 : %dC\n", shm->levels[1].temp);	 
+         printf("              LEVEL 3 : %dC\n", shm->levels[2].temp);	 
+         printf("              LEVEL 4 : %dC\n", shm->levels[3].temp);	 
+         printf("              LEVEL 5 : %dC\n", shm->levels[4].temp);	 
+         printf("              ----ALARM----\n");  
+         printf("              LEVEL 1 Alarm: %d\n", shm->levels[0].alarm);
+         printf("              LEVEL 2 Alarm: %d\n", shm->levels[1].alarm);
+         printf("              LEVEL 3 Alarm: %d\n", shm->levels[2].alarm);
+         printf("              LEVEL 4 Alarm: %d\n", shm->levels[3].alarm);
+         printf("              LEVEL 5 Alarm: %d\n", shm->levels[4].alarm);
+		 printf("---------------------------------------\n"); 
+         threadSleep(1); // Updates Every 'x' amount of milliseconds
          system("clear");
      } 
      return 0;
 }
 
-bool check_plate(char* cars){
-	// Get file pointer
-    
-    if(cars==NULL){
-		return false;
-	}
-    
-    FILE *plates = (FILE *)malloc(sizeof(FILE *));
-	
-    // Open file
-    plates = fopen("./resources/plates.txt", "r");
-    char* numplate=(char*)calloc(7,sizeof(char));
-    
-    if(plates == NULL){
-        return false;
-    }
-	while(fgets(numplate, 7, plates)!=NULL){
-		if(strcmp(numplate,cars)==0){
-		fclose(plates);
-		return true;
-		}
-	}
-    fclose(plates);
-    return false;
-}
+
 
 // Read Shared Memory segment on startup.
 void *read_shared_memory(parking_data_t *shm)
@@ -121,26 +109,43 @@ void *addToHash(void *hashpointer){
 	pthread_mutex_lock(&numMutex);
 	int a=add;
 	add++;
+	char* balls=(char*)malloc(6*sizeof(char));
 	pthread_mutex_unlock(&numMutex);
 	while(has_room(hash)){
-	pthread_cond_wait(&shm->entrys[a].LPR_cond,&shm->entrys[a].LPR_mutex);
+		while(*shm->entrys[a].lpr==0){
+			pthread_cond_wait(&shm->entrys[a].LPR_cond,&shm->entrys[a].LPR_mutex);
+		}
 	//pthread_mutex_lock(&hashMutex);
 	shm->entrys[a].boomgate='R';
-	threadSleep(100);
+	threadSleep(1000);
 	shm->entrys[a].boomgate='O';
 	if(check_plate(shm->entrys[a].lpr)){
 		if(htable_find(hash,shm->entrys[a].lpr)==NULL){
 			htable_add(hash,shm->entrys[a].lpr);
 			//printf("%d\n",total);
 			}
-		}
+	}
+	else{
+		
+	}
 	*shm->entrys[a].lpr=0;
-	threadSleep(100);
+	threadSleep(1000);
 	shm->entrys[a].boomgate='L';
-	threadSleep(100);
+	threadSleep(1000);
 	shm->entrys[a].boomgate='C';
+	threadSleep(1000);
+	
+	balls=generateNumberPlate();
+	if(check_plate(balls)){
+		strncpy(shm->exits[a].lpr,balls,6);
+		threadSleep(1000);
+		*shm->exits[a].lpr=0;
+		htable_delete(hash,balls);
+	}
+	threadSleep(100);	
 		//pthread_mutex_unlock(&hashMutex);
 	}
+	free(balls);
 	notFull++;
 	return 0;
 }
@@ -149,11 +154,11 @@ void *gen_plates(void *hashpointer){
 	htable_t *hash=hashpointer;
 	int i=0;
 	while(notFull==0){
-		while(*shm->entrys[i].lpr!=0){
-			printf("%d\n",i);
-			threadSleep(10);
-		}
 		i=randomNumber()%5;
+		while(shm->entrys[i].boomgate!='C'){
+			threadSleep(100);
+		}
+		
 		char* randPlate=(char*)malloc(6*sizeof(char));
 		randPlate=generateNumberPlate();
 		if(htable_find(hash,randPlate)!=NULL){
@@ -167,12 +172,13 @@ void *gen_plates(void *hashpointer){
 				perror("Signal failed\n");
 			}
 		}
-		threadSleep(1000);
+		threadSleep(100);
 		free(randPlate);
 	}
 	
 	return 0;
 }
+
 
 int main()
 {
